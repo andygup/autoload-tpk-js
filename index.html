@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no"/>
+    <title>Simple Map</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/3.18/esri/css/esri.css">
+    <style>
+        html, body, #map {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+    <script src="https://js.arcgis.com/3.18/"></script>
+    <script>
+        var map, featureCollection, featureLayer, tpkLayer = null, tpkLayer2 = null;
+
+        require([
+            "esri/map",
+            "esri/layers/FeatureLayer",
+            "esri/dijit/PopupTemplate",
+            "esri/graphic",
+            "esri/geometry/Point",
+            "esri/geometry/Polygon",
+            "esri/symbols/SimpleMarkerSymbol",
+            "esri/symbols/SimpleLineSymbol",
+            "esri/symbols/SimpleFillSymbol",
+            "esri/InfoTemplate",
+            "esri/Color",
+            "esri/geometry/geometryEngineAsync",
+            "libs/offline-tpk-src.js",
+            "dojo/domReady!"], function(Map, FeatureLayer, PopupTemplate, Graphic,
+                                        Point, Polygon, SimpleMarkerSymbol, SimpleLineSymbol, SimpleFillSymbol,
+                                        InfoTemplate, Color, GeometryEngine) {
+
+            var symbol = new SimpleFillSymbol(
+                SimpleFillSymbol.STYLE_SOLID,
+                new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color([0, 0, 0]), 2),
+                new Color([0, 0, 255, 0.5]));
+
+            var symbol2 = new SimpleFillSymbol(
+                SimpleFillSymbol.STYLE_SOLID,
+                new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color([0, 0, 0]), 2),
+                new Color([255, 0, 255, 0.5]));
+
+            var TPK_1 = "boulder1.zip";
+            var TPK_3 = "boulder3.zip";
+
+            // Create our empty map
+            map = new Map("map", { });
+
+            addGraphicAndPopup();
+            addAdditionalTPKLayerListener();
+
+            getTPK(TPK_1, function(result){
+                zipParser(result, function (entries){
+                    initBasemap(entries);
+                });
+            });
+
+            function addAdditionalTPKLayerListener(){
+                // Listen for extent change events and load new TPKs if we cross into a new area.
+                // New areas are based on an Extent Polygon.
+                map.on("extent-change", function (evt) {
+
+                    // Extent of boulder3.zip
+                    var extent = {"xmin":-11682510.258733215,"ymin":4857310.064640066,"xmax":-11592773.187526537,"ymax":4895681.4528391715,"spatialReference":{"wkid":102100}}
+
+                    // Here are the extents we are working with
+                    //Boulder 1 {"xmin":-11699020.65684279,"ymin":4801663.908048531,"xmax":-11609283.585636113,"ymax":4840035.296247637,"spatialReference":{"wkid":102100}}
+                    //Boulder 2 {"xmin":-11698409.16061651,"ymin":4835410.856036391,"xmax":-11608672.089409832,"ymax":4873782.244235497,"spatialReference":{"wkid":102100}}
+                    //Boulder 3 {"xmin":-11682510.258733215,"ymin":4857310.064640066,"xmax":-11592773.187526537,"ymax":4895681.4528391715,"spatialReference":{"wkid":102100}}
+
+                    var poly1 = createPolygonFromExtent(evt.extent);
+                    var poly2 = createPolygonFromExtent(extent);
+
+                    // If the current map extent intersects with another TPKs extent then we want to add the new TPK
+                    // to the map as a layer.
+                    GeometryEngine.intersects(poly1, poly2).then(function(evt){
+                        if(evt){
+                            console.log("INTERSECTS!");
+
+                            if(tpkLayer2 == null){
+
+                                // Load boulder3.zip
+                                getTPK(TPK_3, function(result){
+                                    zipParser(result, function (entries){
+                                        tpkLayer2 = new O.esri.TPK.TPKLayer();
+                                        tpkLayer2.on("progress", function (evt) {
+                                            console.log("TPK loading...");
+                                        })
+                                        tpkLayer2.extend(entries);
+                                        map.addLayer(tpkLayer2);
+                                    });
+                                });
+                            }
+
+                        }
+                        else {
+                            console.log("INTERSECT: " + evt);
+                        }
+                    });
+
+                    console.log("LOD: " + JSON.stringify(evt.extent.toJson()));
+                });
+            }
+
+            function addGraphicAndPopup(){
+                // On layer-add load our initial map
+                map.on("layer-add", function(evt){
+                    console.log("Layer added: " + evt.layer.id);
+
+                    // Make sure we only create a new feature layer if the basemap is a TPK
+                    if(evt.layer.hasOwnProperty("TILE_PATH")){
+                        var graphic = createMockGraphic(evt.layer.fullExtent.getCenter());
+                        map.graphics.add(graphic);
+                        //viewExtentBoundary();
+                    }
+
+                });
+            }
+
+            // Unused
+            function viewExtentBoundary(){
+                // Use this code to view an extent's boundaries
+                var extent = {"xmin":-11682510.258733215,"ymin":4857310.064640066,"xmax":-11592773.187526537,"ymax":4895681.4528391715,"spatialReference":{"wkid":102100}}
+                var extent2 = {"xmin":-11699020.65684279,"ymin":4801663.908048531,"xmax":-11609283.585636113,"ymax":4840035.296247637,"spatialReference":{"wkid":102100}};
+                var poly = createPolygonFromExtent(extent);
+                var graphic = new Graphic(poly, symbol);
+                map.graphics.add(graphic);
+            }
+
+            function createPolygonFromExtent(extent){
+                var pt1 = new Point(extent.xmin, extent.ymin, extent.spatialReference);
+                var pt2 = new Point(extent.xmin, extent.ymax, extent.spatialReference);
+                var pt3 = new Point(extent.xmax, extent.ymax, extent.spatialReference);
+                var pt4 = new Point(extent.xmax, extent.ymin, extent.spatialReference);
+
+                var array = [];
+                array.push([pt1.x, pt1.y]);
+                array.push([pt2.x, pt2.y]);
+                array.push([pt3.x, pt3.y]);
+                array.push([pt4.x, pt4.y]);
+
+                var polygon = new Polygon(extent.spatialReference);
+                polygon.addRing(array);
+
+                return polygon;
+            }
+
+            // Shows how to create a popup offline
+            function createMockGraphic(point){
+                var sms = new SimpleMarkerSymbol().setStyle(
+                    SimpleMarkerSymbol.STYLE_SQUARE).setColor(
+                    new Color([255,255,0,0.5]));
+                var attributes = {"ObjectID":1, "description":"test", "title":"Fake Title"};
+                var infoTemplate = new InfoTemplate("Test Locations","ID: ${ObjectID} <br/>Title: ${title} <br/>Description: ${description}");
+                var graphic = new Graphic(point, sms, attributes, infoTemplate);
+                return graphic;
+            }
+
+
+            /**
+             * Retrieve a TPK from a web url
+             * @param url
+             * @param callback
+             */
+            function getTPK(url, callback){
+                var xhrRequest = new XMLHttpRequest();
+                xhrRequest.open("GET", url, true);
+                xhrRequest.responseType = "blob";
+                xhrRequest.onprogress = function(evt){
+                    console.log("Begin downloading remote tpk file...")
+                }
+                xhrRequest.error = function(err){
+                    console.log("ERROR retrieving TPK file: " + err.toString());
+                    alert("There was a problem retrieve the file.");
+                }
+                xhrRequest.onload = function(oEvent) {
+                    if(this.status == 200) {
+                        console.log("Remote tpk download finished.")
+                        callback( this.response );
+                    }
+                    else{
+                        alert("There was a problem loading the file. " + this.status + ": " + this.statusText )
+                    }
+                };
+                xhrRequest.send();
+            }
+
+            /**
+             * Initialize the base map
+             * @param entries
+             */
+            function initBasemap(entries){
+                //Destroy the old map so we can reload a new map
+                if(tpkLayer != null){
+                    map.removeLayer(tpkLayer);
+                    map.destroy();
+                    tpkLayer = null;
+                }
+
+                tpkLayer = new O.esri.TPK.TPKLayer();
+                tpkLayer.on("progress", function (evt) {
+                    console.log("TPK loading...");
+                })
+                tpkLayer.extend(entries);
+                map.addLayer(tpkLayer)
+            }
+
+            /**
+             * Parse the zip file contents of the TPK into a zip.Entries object
+             * @param blob
+             * @param callback
+             */
+            function zipParser(blob, callback){
+                O.esri.zip.createReader(new O.esri.zip.BlobReader(blob), function (zipReader) {
+                    zipReader.getEntries(function (entries) {
+
+                        zipReader.close(function(evt){
+                            console.log("Done reading zip file.")
+                        });
+
+                        callback( entries );
+                    }, function (err) {
+                        alert("There was a problem reading the file!: " + err);
+                    })
+                })
+            }
+
+        });
+    </script>
+</head>
+
+<body>
+<div id="map"></div>
+</body>
+</html>
