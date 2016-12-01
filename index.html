@@ -18,11 +18,10 @@
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
     <script src="https://js.arcgis.com/3.18/"></script>
     <script>
-        var map, featureCollection, featureLayer, tpkLayer = null, tpkLayer2 = null;
+        var map, tpkLayer = null, tpkLayer2 = null;
 
         require([
             "esri/map",
-            "esri/layers/FeatureLayer",
             "esri/dijit/PopupTemplate",
             "esri/graphic",
             "esri/geometry/Point",
@@ -34,7 +33,7 @@
             "esri/Color",
             "esri/geometry/geometryEngineAsync",
             "libs/offline-tpk-src.js",
-            "dojo/domReady!"], function(Map, FeatureLayer, PopupTemplate, Graphic,
+            "dojo/domReady!"], function(Map, PopupTemplate, Graphic,
                                         Point, Polygon, SimpleMarkerSymbol, SimpleLineSymbol, SimpleFillSymbol,
                                         InfoTemplate, Color, GeometryEngine) {
 
