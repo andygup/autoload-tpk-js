@@ -1,0 +1,6 @@
+{
+  "aboulder1":{"xmin":-11719764.219487024,"ymin":4868477.330694354,"xmax":-11718371.63237807,"ymax":4869468.623404845,"spatialReference":{"wkid":102100,"latestWkid":3857}},
+  "aboulder2":{"xmin":-11719798.855015462,"ymin":4869484.149676214,"xmax":-11718406.267906507,"ymax":4870475.4423867045,"spatialReference":{"wkid":102100,"latestWkid":3857}},
+  "aboulder3":{"xmin":-11721146.057638876,"ymin":4869504.45326185,"xmax":-11719753.470529921,"ymax":4870495.745972341,"spatialReference":{"wkid":102100,"latestWkid":3857}},
+  "aboulder4":{"xmin":-11721206.968395784,"ymin":4868605.123851009,"xmax":-11719814.38128683,"ymax":4869596.416561499,"spatialReference":{"wkid":102100,"latestWkid":3857}}
+}
