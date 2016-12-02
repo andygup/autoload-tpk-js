@@ -18,10 +18,11 @@
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
     <script src="https://js.arcgis.com/3.18/"></script>
     <script>
-        var map, tpkLayer = null, tpkLayer2 = null;
+        var map, tpkLayer = {}, tpkLayer2 = null, configObj = null;
 
         require([
             "esri/map",
+            "esri/geometry/Extent",
             "esri/dijit/PopupTemplate",
             "esri/graphic",
             "esri/geometry/Point",
@@ -31,79 +32,113 @@
             "esri/symbols/SimpleFillSymbol",
             "esri/InfoTemplate",
             "esri/Color",
-            "esri/geometry/geometryEngineAsync",
+            "esri/geometry/geometryEngine",
             "libs/offline-tpk-src.js",
-            "dojo/domReady!"], function(Map, PopupTemplate, Graphic,
+            "dojo/domReady!"], function(Map, Extent, PopupTemplate, Graphic,
                                         Point, Polygon, SimpleMarkerSymbol, SimpleLineSymbol, SimpleFillSymbol,
                                         InfoTemplate, Color, GeometryEngine) {
 
+            // Reference the buttons
+            var btn1 = document.getElementById("btn-tpk1");
+            var btn2 = document.getElementById("btn-tpk2");
+            var btn3 = document.getElementById("btn-tpk3");
+            var btn4 = document.getElementById("btn-tpk4");
+
             var symbol = new SimpleFillSymbol(
-                SimpleFillSymbol.STYLE_SOLID,
-                new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color([0, 0, 0]), 2),
+                SimpleFillSymbol.STYLE_NULL,
+                new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color([0, 0, 255]), 2),
                 new Color([0, 0, 255, 0.5]));
 
-            var symbol2 = new SimpleFillSymbol(
-                SimpleFillSymbol.STYLE_SOLID,
-                new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color([0, 0, 0]), 2),
-                new Color([255, 0, 255, 0.5]));
-
-            var TPK_1 = "boulder1.zip";
-            var TPK_3 = "boulder3.zip";
+            var TPK_initial = "aboulder1";
 
             // Create our empty map
             map = new Map("map", { });
+            map.on("load", function(){ addAdditionalTPKLayerListener(); });
 
             addGraphicAndPopup();
-            addAdditionalTPKLayerListener();
 
-            getTPK(TPK_1, function(result){
-                zipParser(result, function (entries){
-                    initBasemap(entries);
+            // Read the configuration file
+            getConfig("config.json", function(result){
+                configObj = JSON.parse(result);
+                console.log("Config downloaded!");
+
+                // Retrieve the initial TPK that will act as our starting basemap
+                getTPK(TPK_initial, function(url, result){
+                    zipParser(result, function (entries){
+                        initBasemap(entries);
+                        initClickHandlers();
+                    });
                 });
             });
+
+            function initClickHandlers(){
+                btn1.onclick = function(evt){
+                    var extent = new Extent(configObj["aboulder1"]);
+                    map.setExtent(extent);
+                    drawBoundary(extent);
+                };
+
+                btn2.onclick = function(evt){
+                    var extent = new Extent(configObj["aboulder2"]);
+                    map.setExtent(extent);
+                    drawBoundary(extent);
+                };
+
+                btn3.onclick = function(evt){
+                    var extent = new Extent(configObj["aboulder3"]);
+                    map.setExtent(extent);
+                    drawBoundary(extent);
+                };
+
+                btn4.onclick = function(evt){
+                    var extent = new Extent(configObj["aboulder4"]);
+                    map.setExtent(extent);
+                    drawBoundary(extent);
+                };
+
+            }
+
+            function drawBoundary(extent){
+                map.graphics.clear();
+                displayExtentBoundary(extent);
+            }
 
             function addAdditionalTPKLayerListener(){
                 // Listen for extent change events and load new TPKs if we cross into a new area.
                 // New areas are based on an Extent Polygon.
                 map.on("extent-change", function (evt) {
 
-                    // Extent of boulder3.zip
-                    var extent = {"xmin":-11682510.258733215,"ymin":4857310.064640066,"xmax":-11592773.187526537,"ymax":4895681.4528391715,"spatialReference":{"wkid":102100}}
-
-                    // Here are the extents we are working with
-                    //Boulder 1 {"xmin":-11699020.65684279,"ymin":4801663.908048531,"xmax":-11609283.585636113,"ymax":4840035.296247637,"spatialReference":{"wkid":102100}}
-                    //Boulder 2 {"xmin":-11698409.16061651,"ymin":4835410.856036391,"xmax":-11608672.089409832,"ymax":4873782.244235497,"spatialReference":{"wkid":102100}}
-                    //Boulder 3 {"xmin":-11682510.258733215,"ymin":4857310.064640066,"xmax":-11592773.187526537,"ymax":4895681.4528391715,"spatialReference":{"wkid":102100}}
-
                     var poly1 = createPolygonFromExtent(evt.extent);
-                    var poly2 = createPolygonFromExtent(extent);
 
-                    // If the current map extent intersects with another TPKs extent then we want to add the new TPK
-                    // to the map as a layer.
-                    GeometryEngine.intersects(poly1, poly2).then(function(evt){
-                        if(evt){
-                            console.log("INTERSECTS!");
+                    for (var key in configObj) {
+                        if(configObj.hasOwnProperty(key) && key != TPK_initial) {
+                            var poly2 = createPolygonFromExtent(configObj[key]);
 
-                            if(tpkLayer2 == null){
+                            // If the current map extent intersects with another TPKs extent then we want to add the new TPK
+                            // to the map as a layer.
+                            if(GeometryEngine.intersect(poly1, poly2)){
 
-                                // Load boulder3.zip
-                                getTPK(TPK_3, function(result){
-                                    zipParser(result, function (entries){
-                                        tpkLayer2 = new O.esri.TPK.TPKLayer();
-                                        tpkLayer2.on("progress", function (evt) {
-                                            console.log("TPK loading...");
-                                        })
-                                        tpkLayer2.extend(entries);
-                                        map.addLayer(tpkLayer2);
+                                if(!tpkLayer.hasOwnProperty(key)){
+                                    console.log("INTERSECTS with: " + key);
+
+                                    getTPK(key, function(key, result){
+
+                                        zipParser(result, function (entries){
+                                            tpkLayer[key] = new O.esri.TPK.TPKLayer();
+                                            tpkLayer[key].on("progress", function (evt) {
+                                                console.log("TPK loading...");
+                                            });
+                                            tpkLayer[key].extend(entries);
+                                            map.addLayer(tpkLayer[key]);
+                                        });
                                     });
-                                });
+                                }
                             }
-
+                            else {
+                                console.log("No intersection with : " + key);
+                            }
                         }
-                        else {
-                            console.log("INTERSECT: " + evt);
-                        }
-                    });
+                    }
 
                     console.log("LOD: " + JSON.stringify(evt.extent.toJson()));
                 });
@@ -118,18 +153,17 @@
                     if(evt.layer.hasOwnProperty("TILE_PATH")){
                         var graphic = createMockGraphic(evt.layer.fullExtent.getCenter());
                         map.graphics.add(graphic);
-                        //viewExtentBoundary();
                     }
-
                 });
             }
 
-            // Unused
-            function viewExtentBoundary(){
-                // Use this code to view an extent's boundaries
-                var extent = {"xmin":-11682510.258733215,"ymin":4857310.064640066,"xmax":-11592773.187526537,"ymax":4895681.4528391715,"spatialReference":{"wkid":102100}}
-                var extent2 = {"xmin":-11699020.65684279,"ymin":4801663.908048531,"xmax":-11609283.585636113,"ymax":4840035.296247637,"spatialReference":{"wkid":102100}};
-                var poly = createPolygonFromExtent(extent);
+            /**
+             * Displays the boundary of the extent.
+             * There may be tiles that overlap with the extent.
+             * @param extent Extent JSON
+             */
+            function displayExtentBoundary(extent){
+               var poly = createPolygonFromExtent(extent);
                 var graphic = new Graphic(poly, symbol);
                 map.graphics.add(graphic);
             }
@@ -152,7 +186,10 @@
                 return polygon;
             }
 
-            // Shows how to create a popup offline
+            /**
+             * Shows how to create a popup when using a TPK as a basemap
+             * @param point Esri Point
+             */
             function createMockGraphic(point){
                 var sms = new SimpleMarkerSymbol().setStyle(
                     SimpleMarkerSymbol.STYLE_SQUARE).setColor(
@@ -163,6 +200,32 @@
                 return graphic;
             }
 
+            /**
+             * Retrieve config file
+             * @param url
+             * @param callback
+             */
+            function getConfig(url, callback){
+                var xhrRequest = new XMLHttpRequest();
+                xhrRequest.open("GET", url, true);
+                xhrRequest.onprogress = function(evt){
+                    console.log("Begin downloading config file...")
+                };
+                xhrRequest.error = function(err){
+                    console.log("ERROR retrieving config file: " + err.toString());
+                    alert("There was a problem retrieve the config file.");
+                };
+                xhrRequest.onload = function(oEvent) {
+                    if(this.status == 200) {
+                        console.log("Config file download finished.")
+                        callback( this.response );
+                    }
+                    else{
+                        alert("There was a problem loading the config file. " + this.status + ": " + this.statusText )
+                    }
+                };
+                xhrRequest.send();
+            }
 
             /**
              * Retrieve a TPK from a web url
@@ -171,19 +234,19 @@
              */
             function getTPK(url, callback){
                 var xhrRequest = new XMLHttpRequest();
-                xhrRequest.open("GET", url, true);
+                xhrRequest.open("GET", url + ".zip", true);
                 xhrRequest.responseType = "blob";
                 xhrRequest.onprogress = function(evt){
-                    console.log("Begin downloading remote tpk file...")
-                }
+                    console.log("Begin downloading remote tpk file: " + url);
+                };
                 xhrRequest.error = function(err){
                     console.log("ERROR retrieving TPK file: " + err.toString());
                     alert("There was a problem retrieve the file.");
-                }
+                };
                 xhrRequest.onload = function(oEvent) {
                     if(this.status == 200) {
                         console.log("Remote tpk download finished.")
-                        callback( this.response );
+                        callback( url, this.response );
                     }
                     else{
                         alert("There was a problem loading the file. " + this.status + ": " + this.statusText )
@@ -198,18 +261,18 @@
              */
             function initBasemap(entries){
                 //Destroy the old map so we can reload a new map
-                if(tpkLayer != null){
-                    map.removeLayer(tpkLayer);
-                    map.destroy();
-                    tpkLayer = null;
-                }
+//                if(tpkLayer.length > 0){
+//                    map.removeLayer(tpkLayer[0]);
+//                    map.destroy();
+//                    tpkLayer = null;
+//                }
 
-                tpkLayer = new O.esri.TPK.TPKLayer();
-                tpkLayer.on("progress", function (evt) {
+                tpkLayer["aboulder1"] = new O.esri.TPK.TPKLayer();
+                tpkLayer["aboulder1"].on("progress", function (evt) {
                     console.log("TPK loading...");
-                })
-                tpkLayer.extend(entries);
-                map.addLayer(tpkLayer)
+                });
+                tpkLayer["aboulder1"].extend(entries);
+                map.addLayer(tpkLayer["aboulder1"]);
             }
 
             /**
@@ -240,9 +303,10 @@
 
 <div class="panel-body">
     <div class="btn-group" role="group" >
-        <button type="button" class="btn btn-default">TPK 1</button>
-        <button type="button" class="btn btn-default">TPK 2</button>
-        <button type="button" class="btn btn-default">TPK 3</button>
+        <button id="btn-tpk1" type="button" class="btn btn-default">TPK 1</button>
+        <button id="btn-tpk2" type="button" class="btn btn-default">TPK 2</button>
+        <button id="btn-tpk3" type="button" class="btn btn-default">TPK 3</button>
+        <button id="btn-tpk4" type="button" class="btn btn-default">TPK 4</button>
     </div>
 </div>
 
